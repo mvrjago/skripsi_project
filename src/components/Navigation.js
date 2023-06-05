@@ -4,9 +4,8 @@ import Nav from 'react-bootstrap/Nav';
 import { LinkContainer } from 'react-router-bootstrap';
 import './Navigation.css';
 
-
 const Maps = (props) => (
-  <LinkContainer to="">
+  <LinkContainer to="Maps">
     <Nav.Link eventKey="/Maps" onSelect={props.navigationToggle}>Visualisasi Probabilitas</Nav.Link>
   </LinkContainer>
 );
@@ -34,7 +33,6 @@ const Navigation = (props) => {
   const [showHeader, setShowHeader] = useState(true);
 
   useEffect(() => {
-    let prevScrollPos = window.pageYOffset;
     let ticking = false;
 
     const handleScroll = () => {
@@ -49,7 +47,7 @@ const Navigation = (props) => {
             // Pengguna menggulir ke bawah
             setShowHeader(false);
           }
-          prevScrollPos = currentScrollPos;
+
           ticking = false;
         });
 
@@ -65,8 +63,8 @@ const Navigation = (props) => {
   }, []);
 
   return (
-    <Navbar bg="primary" variant="dark" fixed="top" expand="md" className={showHeader ? '' : 'hidden'}>
-      <Navbar.Brand href="/">SKRIPSI</Navbar.Brand>
+    <Navbar className='navbar'>
+      <Navbar.Brand href="/Maps">SKRIPSI</Navbar.Brand>
       <Navbar.Toggle aria-controls="navbar" />
       <Navbar.Collapse id="navbar">
         <Nav className="ml-auto">

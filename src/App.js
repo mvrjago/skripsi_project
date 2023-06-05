@@ -12,10 +12,10 @@ class App extends Component {
   render() {
     return (
       <Layout>
-        <Route path="/" exact component={MapLayout} />
+        <Route path="/Maps" exact component={MapLayout} />
         <Route path="/Maps2" exact component={MapLayout2} />
-        <Route path="/HowToUse" render={() => <Layout2><HowToUse /></Layout2>} />
-        <Route path="/About" render={() => <Layout2><About /></Layout2>} />
+        <Route path="/HowToUse" exact component = {HowToUse} />
+        <Route path="/About" exact component = {About} />
       </Layout>
     );
   }
