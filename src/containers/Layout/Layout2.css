@@ -1,0 +1,15 @@
+.Content2 {
+  position: absolute;
+  width: 100vw;
+  min-height: 500px; /* Nilai tinggi yang diinginkan untuk tampilan desktop */
+  height: auto;
+  padding-bottom: 20px;
+}
+
+/* Media query untuk desktop */
+@media (min-width: 769px) {
+  .Content2 {
+    border-left: 200px solid #e8e8e8;
+    border-right: 200px solid #e8e8e8;
+  }
+}
