@@ -4,6 +4,7 @@ import Nav from 'react-bootstrap/Nav';
 import { LinkContainer } from 'react-router-bootstrap';
 import './Navigation.css';
 
+
 const Maps = (props) => (
   <LinkContainer to="Maps">
     <Nav.Link eventKey="/Maps" onSelect={props.navigationToggle}>Visualisasi Probabilitas</Nav.Link>
@@ -63,7 +64,7 @@ const Navigation = (props) => {
   }, []);
 
   return (
-    <Navbar className='navbar'>
+    <Navbar bg="primary" variant="dark" fixed="top" expand="sm" className={showHeader ? '' : 'hidden'}>
       <Navbar.Brand href="/Maps">SKRIPSI</Navbar.Brand>
       <Navbar.Toggle aria-controls="navbar" />
       <Navbar.Collapse id="navbar">

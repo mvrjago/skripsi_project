@@ -1,13 +1,14 @@
 import React, { Component } from 'react';
 import 'ol/ol.css';
-import '../OpenlayerMaps/Map.css';
+import './Map.css';
 import Map from 'ol/Map.js';
 import View from 'ol/View.js';
-import { Stroke, Style, Icon } from 'ol/style.js';
+import { Stroke, Style, Icon, Fill } from 'ol/style.js';
 import { Tile as TileLayer, Vector as VectorLayer } from 'ol/layer.js';
 import OSM from 'ol/source/OSM.js';
 import VectorSource from 'ol/source/Vector.js';
 import Feature from 'ol/Feature.js';
+import { fromLonLat } from 'ol/proj.js';
 import LineString from 'ol/geom/LineString.js';
 import { getVectorContext } from 'ol/render.js';
 import { getWidth } from 'ol/extent.js';
@@ -25,6 +26,13 @@ class MapComponent extends Component {
     this.style = null;
     this.airplaneIcon = null;
     this.pointsPerMs = 0.02;
+    this.state = {
+      coordinateInput: '',
+      lamin: null,
+      lomin: null,
+      lamax: null,
+      lomax: null,
+    };
   }
 
   componentDidMount() {
@@ -59,9 +67,6 @@ class MapComponent extends Component {
     });
 
     this.flightsSource = new VectorSource({
-      attributions:
-        'Flight data by ' +
-        '<a href="https://openflights.org/data.html">OpenFlights</a>,',
       loader: () => {
         const url = '/data/openflights/flights.json';
         fetch(url)
@@ -170,8 +175,102 @@ class MapComponent extends Component {
     }, timeout);
   }
 
+  handleCoordinateInputChange = (event) => {
+    this.setState({ coordinateInput: event.target.value });
+  };
+
+  handleCoordinateSubmit = () => {
+    const { coordinateInput } = this.state;
+    // Parse koordinat dari string input
+    const coordinates = coordinateInput.split(',').map((coord) => parseFloat(coord.trim()));
+    // Cek apakah koordinat valid
+    if (coordinates.length === 4 && !isNaN(coordinates[0]) && !isNaN(coordinates[1]) && !isNaN(coordinates[2]) && !isNaN(coordinates[3])) {
+      // Atur tampilan ke koordinat yang dipilih
+      const view = this.map.getView();
+      const center = fromLonLat(coordinates); // Ubah koordinat menjadi titik dalam EPSG:3857
+      view.setCenter(center);
+      view.setZoom(2); // Ganti dengan zoom level yang diinginkan
+
+      // Atur state dengan koordinat terkait
+      this.setState(
+        {
+          lamin: coordinates[1] - 1,
+          lomin: coordinates[0] - 1,
+          lamax: coordinates[3] + 1,
+          lomax: coordinates[2] + 1,
+        },
+        () => {
+          this.drawBoundingBox();
+        }
+      );
+    } else {
+      // Tampilkan pesan kesalahan jika koordinat tidak valid
+      alert('Koordinat tidak valid!');
+    }
+  };
+
+  drawBoundingBox() {
+    const { lamin, lomin, lamax, lomax } = this.state;
+
+    const bboxSource = new VectorSource();
+    const bboxLayer = new VectorLayer({
+      source: bboxSource,
+      style: new Style({
+        stroke: new Stroke({
+          color: 'blue',
+          width: 5,
+        }),
+        fill: new Fill({
+          color: 'rgba(0, 0, 255, 0.1)',
+        }),
+      }),
+    });
+
+    const bboxCoords = [
+      [lomin, lamin],
+      [lomin, lamax],
+      [lomax, lamax],
+      [lomax, lamin],
+      [lomin, lamin],
+    ];
+
+    const bboxFeature = new Feature({
+      geometry: new LineString(bboxCoords).transform('EPSG:4326', 'EPSG:3857'),
+    });
+
+    bboxSource.addFeature(bboxFeature);
+
+    this.map.addLayer(bboxLayer);
+  }
+
   render() {
-    return <div ref={this.mapRef} className="map" />;
+    const { lamin, lomin, lamax, lomax } = this.state;
+    return (
+      <div>
+        <div ref={this.mapRef} className="map-container" />
+        <div className="coordinate-input">
+          <form>
+            <input
+              type="text"
+              name="coordinateInput"
+              placeholder="Masukkan koordinat (longitude, latitude)"
+              onChange={this.handleCoordinateInputChange}
+            />
+            <button type="button" onClick={this.handleCoordinateSubmit}>
+              Go
+            </button>
+          </form>
+        </div>
+        {lamin !== null && lomin !== null && lamax !== null && lomax !== null && (
+          <div>
+            <p>Lamin: {lamin}</p>
+            <p>Lomin: {lomin}</p>
+            <p>Lamax: {lamax}</p>
+            <p>Lomax: {lomax}</p>
+          </div>
+        )}
+      </div>
+    );
   }
 }
 
