@@ -53,6 +53,16 @@ class MapComponent extends Component {
       }),
     });
 
+    this.flightsSource = new VectorSource({
+      loader: () => {
+        this.loadFlightsData(); // Load data penerbangan saat komponen dipasang
+        // Set interval untuk memuat data penerbangan setiap 10 detik (10000 milidetik)
+        setInterval(() => {
+          this.loadFlightsData();
+        }, 10000);
+      },
+    });
+
     this.airplaneIcon = new Icon({
       src: airplaneimg,
       scale: 0.5,
@@ -66,54 +76,6 @@ class MapComponent extends Component {
       image: this.airplaneIcon,
     });
 
-    this.flightsSource = new VectorSource({
-      loader: () => {
-        const url = '/data/openflights/flights.json';
-        fetch(url)
-          .then((response) => {
-            if (!response.ok) {
-              throw new Error('Network response was not ok');
-            }
-            return response.json();
-          })
-          .then((json) => {
-            const flightsData = json.flights;
-            for (let i = 0; i < flightsData.length; i++) {
-              const flight = flightsData[i];
-              const from = flight[0];
-              const to = flight[1];
-
-              const arcGenerator = new arc.GreatCircle(
-                { x: from[1], y: from[0] },
-                { x: to[1], y: to[0] }
-              );
-
-              const arcLine = arcGenerator.Arc(100, { offset: 10 });
-              const features = [];
-              arcLine.geometries.forEach((geometry) => {
-                const line = new LineString(geometry.coords);
-                line.transform('EPSG:4326', 'EPSG:3857');
-
-                features.push(
-                  new Feature({
-                    geometry: line,
-                    finished: false,
-                  })
-                );
-              });
-
-              this.addLater(features, i * 50);
-            }
-
-            this.tileLayer.on('postrender', this.animateFlights);
-          })
-          .catch((error) => {
-            console.error('Error fetching JSON:', error);
-            console.error('URL:', url);
-          });
-      },
-    });
-
     this.flightsLayer = new VectorLayer({
       source: this.flightsSource,
       style: (feature) => {
@@ -125,6 +87,79 @@ class MapComponent extends Component {
     });
 
     this.map.addLayer(this.flightsLayer);
+  }
+
+  loadFlightsData() {
+    const url = '/data/openflights/data_adsb.json';
+    fetch(url)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        return response.json();
+      })
+      .then((json) => {
+        const flightsData = json.flights;
+  
+        // Menghitung total batch yang diperlukan
+        const totalBatches = Math.ceil(flightsData.length / 1000);
+  
+        // Memuat data dalam batch menggunakan setTimeout
+        let batchIndex = 0;
+        const loadNextBatch = () => {
+          const startIndex = batchIndex * 1000;
+          const endIndex = (batchIndex + 1) * 1000;
+          const flightsBatch = flightsData.slice(startIndex, endIndex);
+  
+          this.loadFlightsBatch(flightsBatch);
+  
+          batchIndex++;
+  
+          if (batchIndex < totalBatches) {
+            setTimeout(loadNextBatch, 1000); // Menunggu 1 detik sebelum memuat batch berikutnya
+          }
+        };
+  
+        loadNextBatch();
+      })
+      .catch((error) => {
+        console.error('Error fetching JSON:', error);
+        console.error('URL:', url);
+      });
+  }
+  
+  loadFlightsBatch(flightsBatch) {
+    for (let i = 0; i < flightsBatch.length; i++) {
+      const flights = flightsBatch[i];
+      const from = flights[0];
+      const to = flights[1];
+  
+      // Periksa apakah nilai 'from' dan 'to' valid sebelum mengakses indeksnya
+      if (from && from.length >= 2 && to && to.length >= 2) {
+        const arcGenerator = new arc.GreatCircle(
+          { x: from[1], y: from[0] },
+          { x: to[1], y: to[0] }
+        );
+  
+        const arcLine = arcGenerator.Arc(100, { offset: 10 });
+        const features = [];
+        arcLine.geometries.forEach((geometry) => {
+          const line = new LineString(geometry.coords);
+          line.transform('EPSG:4326', 'EPSG:3857');
+  
+          features.push(
+            new Feature({
+              geometry: line,
+              finished: false,
+            })
+          );
+        });
+  
+        this.addLater(features, i * 50);
+      }
+    }
+  
+    this.tileLayer.on('postrender', this.animateFlights);
   }
 
   animateFlights = (event) => {
