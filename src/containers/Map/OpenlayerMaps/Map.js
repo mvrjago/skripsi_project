@@ -37,6 +37,7 @@ class MapComponent extends Component {
 
   componentDidMount() {
     this.initializeMap();
+    this.loadFlightsData();
   }
 
   initializeMap() {
@@ -60,7 +61,7 @@ class MapComponent extends Component {
         setInterval(() => {
           this.loadFlightsData();
         }, 10000);
-      },
+      }
     });
 
     this.airplaneIcon = new Icon({
@@ -73,9 +74,18 @@ class MapComponent extends Component {
         color: 'red',
         width: 2,
       }),
-      image: this.airplaneIcon,
+      image: this.airplaneIcon
     });
 
+    this.airplanesSource = new VectorSource();
+    this.airplanesLayer = new VectorLayer({
+      source: this.airplanesSource,
+      style: new Style({
+        image: this.airplaneIcon,
+      }),
+    });
+
+    this.flightsSource = new VectorSource();
     this.flightsLayer = new VectorLayer({
       source: this.flightsSource,
       style: (feature) => {
@@ -87,6 +97,7 @@ class MapComponent extends Component {
     });
 
     this.map.addLayer(this.flightsLayer);
+    this.map.addLayer(this.airplanesLayer);
   }
 
   loadFlightsData() {
@@ -100,26 +111,28 @@ class MapComponent extends Component {
       })
       .then((json) => {
         const flightsData = json.flights;
-  
+
         // Menghitung total batch yang diperlukan
         const totalBatches = Math.ceil(flightsData.length / 1000);
-  
+
         // Memuat data dalam batch menggunakan setTimeout
         let batchIndex = 0;
         const loadNextBatch = () => {
           const startIndex = batchIndex * 1000;
           const endIndex = (batchIndex + 1) * 1000;
           const flightsBatch = flightsData.slice(startIndex, endIndex);
-  
+
           this.loadFlightsBatch(flightsBatch);
-  
+
           batchIndex++;
-  
+
           if (batchIndex < totalBatches) {
             setTimeout(loadNextBatch, 1000); // Menunggu 1 detik sebelum memuat batch berikutnya
           }
+
+          this.map.render();
         };
-  
+
         loadNextBatch();
       })
       .catch((error) => {
@@ -127,8 +140,10 @@ class MapComponent extends Component {
         console.error('URL:', url);
       });
   }
-  
+
   loadFlightsBatch(flightsBatch) {
+    const { lamin, lomin, lamax, lomax } = this.state;
+  
     for (let i = 0; i < flightsBatch.length; i++) {
       const flights = flightsBatch[i];
       const from = flights[0];
@@ -136,65 +151,88 @@ class MapComponent extends Component {
   
       // Periksa apakah nilai 'from' dan 'to' valid sebelum mengakses indeksnya
       if (from && from.length >= 2 && to && to.length >= 2) {
-        const arcGenerator = new arc.GreatCircle(
-          { x: from[1], y: from[0] },
-          { x: to[1], y: to[0] }
-        );
+        const fromLonLat = from.map(coord => parseFloat(coord));
+        const toLonLat = to.map(coord => parseFloat(coord));
   
-        const arcLine = arcGenerator.Arc(100, { offset: 10 });
-        const features = [];
-        arcLine.geometries.forEach((geometry) => {
-          const line = new LineString(geometry.coords);
-          line.transform('EPSG:4326', 'EPSG:3857');
-  
-          features.push(
-            new Feature({
-              geometry: line,
-              finished: false,
-            })
+        // Periksa apakah koordinat penerbangan berada di dalam bbox
+        if (
+          fromLonLat[1] >= lomin &&
+          fromLonLat[1] <= lomax &&
+          fromLonLat[0] >= lamin &&
+          fromLonLat[0] <= lamax &&
+          toLonLat[1] >= lomin &&
+          toLonLat[1] <= lomax &&
+          toLonLat[0] >= lamin &&
+          toLonLat[0] <= lamax
+        ) {
+          const arcGenerator = new arc.GreatCircle(
+            { x: fromLonLat[1], y: fromLonLat[0] },
+            { x: toLonLat[1], y: toLonLat[0] }
           );
-        });
   
-        this.addLater(features, i * 50);
+          const arcLine = arcGenerator.Arc(100, { offset: 10});
+          const features = [];
+          arcLine.geometries.forEach((geometry) => {
+            const line = new LineString(geometry.coords);
+            line.transform('EPSG:4326', 'EPSG:3857');
+  
+            features.push(
+              new Feature({
+                geometry: line,
+                finished: false,
+              })
+            );
+          });
+  
+          this.addLater(features, i * 50);
+        }
       }
     }
   
     this.tileLayer.on('postrender', this.animateFlights);
   }
+  
 
   animateFlights = (event) => {
-    const vectorContext = getVectorContext(event);
-    const frameState = event.frameState;
-    vectorContext.setStyle(this.style);
+    const { lamin, lomin, lamax, lomax } = this.state;
 
-    const features = this.flightsSource.getFeatures();
-    for (let i = 0; i < features.length; i++) {
-      const feature = features[i];
-      if (!feature.get('finished')) {
-        const coords = feature.getGeometry().getCoordinates();
-        const elapsedTime = frameState.time - feature.get('start');
-        if (elapsedTime >= 0) {
-          const elapsedPoints = elapsedTime * this.pointsPerMs;
+    // Periksa apakah bbox telah digambar sebelumnya
+    if (lamin !== null && lomin !== null && lamax !== null && lomax !== null) {
+      const vectorContext = getVectorContext(event);
+      const frameState = event.frameState;
+      vectorContext.setStyle(this.style);
 
-          if (elapsedPoints >= coords.length) {
-            feature.set('finished', true);
+      const features = this.flightsSource.getFeatures();
+      for (let i = 0; i < features.length; i++) {
+        const feature = features[i];
+        if (!feature.get('finished')) {
+          const coords = feature.getGeometry().getCoordinates();
+          const elapsedTime = frameState.time - feature.get('start');
+          if (elapsedTime >= 0) {
+            const elapsedPoints = elapsedTime * this.pointsPerMs;
+
+            if (elapsedPoints >= coords.length) {
+              feature.set('finished', true);
+            }
+
+            const maxIndex = Math.min(elapsedPoints, coords.length);
+            const currentLine = new LineString(coords.slice(0, maxIndex));
+
+            const worldWidth = getWidth(this.map.getView().getProjection().getExtent());
+            const offset = Math.floor(this.map.getView().getCenter()[0] / worldWidth);
+
+            currentLine.translate(offset * worldWidth, 0);
+            vectorContext.drawGeometry(currentLine);
+            currentLine.translate(worldWidth, 0);
+            vectorContext.drawGeometry(currentLine);
+
+            
           }
-
-          const maxIndex = Math.min(elapsedPoints, coords.length);
-          const currentLine = new LineString(coords.slice(0, maxIndex));
-
-          const worldWidth = getWidth(this.map.getView().getProjection().getExtent());
-          const offset = Math.floor(this.map.getView().getCenter()[0] / worldWidth);
-
-          currentLine.translate(offset * worldWidth, 0);
-          vectorContext.drawGeometry(currentLine);
-          currentLine.translate(worldWidth, 0);
-          vectorContext.drawGeometry(currentLine);
         }
       }
-    }
 
-    this.map.render();
+      this.map.render();
+    }
   };
 
   addLater(features, timeout) {
@@ -210,39 +248,51 @@ class MapComponent extends Component {
     }, timeout);
   }
 
+
   handleCoordinateInputChange = (event) => {
     this.setState({ coordinateInput: event.target.value });
   };
 
-  handleCoordinateSubmit = () => {
-    const { coordinateInput } = this.state;
-    // Parse koordinat dari string input
-    const coordinates = coordinateInput.split(',').map((coord) => parseFloat(coord.trim()));
-    // Cek apakah koordinat valid
-    if (coordinates.length === 4 && !isNaN(coordinates[0]) && !isNaN(coordinates[1]) && !isNaN(coordinates[2]) && !isNaN(coordinates[3])) {
-      // Atur tampilan ke koordinat yang dipilih
-      const view = this.map.getView();
-      const center = fromLonLat(coordinates); // Ubah koordinat menjadi titik dalam EPSG:3857
-      view.setCenter(center);
-      view.setZoom(2); // Ganti dengan zoom level yang diinginkan
+handleCoordinateSubmit = () => {
+  const { coordinateInput } = this.state;
+  // Parse koordinat dari string input
+  const coordinates = coordinateInput.split(',').map((coord) => parseFloat(coord.trim()));
+  // Cek apakah koordinat valid
+  if (coordinates.length === 4 && !isNaN(coordinates[0]) && !isNaN(coordinates[1]) && !isNaN(coordinates[2]) && !isNaN(coordinates[3])) {
+    // Hapus vektor bbox sebelumnya (jika ada)
+    this.removeBoundingBox();
 
-      // Atur state dengan koordinat terkait
-      this.setState(
-        {
-          lamin: coordinates[1] - 1,
-          lomin: coordinates[0] - 1,
-          lamax: coordinates[3] + 1,
-          lomax: coordinates[2] + 1,
-        },
-        () => {
-          this.drawBoundingBox();
-        }
-      );
-    } else {
-      // Tampilkan pesan kesalahan jika koordinat tidak valid
-      alert('Koordinat tidak valid!');
-    }
-  };
+    // Atur tampilan ke koordinat yang dipilih
+    const view = this.map.getView();
+    const center = fromLonLat(coordinates); // Ubah koordinat menjadi titik dalam EPSG:3857
+    view.setCenter(center);
+    view.setZoom(2); // Ganti dengan zoom level yang diinginkan
+
+    // Atur state dengan koordinat terkait
+    this.setState(
+      {
+        lamin: coordinates[1] - 1,
+        lomin: coordinates[0] - 1,
+        lamax: coordinates[3] + 1,
+        lomax: coordinates[2] + 1,
+      },
+      () => {
+        this.drawBoundingBox();
+      }
+    );
+  } else {
+    // Tampilkan pesan kesalahan jika koordinat tidak valid
+    alert('Koordinat tidak valid!');
+  }
+};
+
+removeBoundingBox() {
+  const layers = this.map.getLayers().getArray();
+  const bboxLayers = layers.filter(layer => layer.get('name') === 'bboxLayer');
+  bboxLayers.forEach(bboxLayer => {
+    this.map.removeLayer(bboxLayer);
+  });
+}
 
   drawBoundingBox() {
     const { lamin, lomin, lamax, lomax } = this.state;
@@ -275,6 +325,8 @@ class MapComponent extends Component {
 
     bboxSource.addFeature(bboxFeature);
 
+    bboxLayer.set('name', 'bboxLayer'); // Setel nama lapisan untuk dapat diakses saat dihapus
+
     this.map.addLayer(bboxLayer);
   }
 
@@ -297,11 +349,8 @@ class MapComponent extends Component {
           </form>
         </div>
         {lamin !== null && lomin !== null && lamax !== null && lomax !== null && (
-          <div>
-            <p>Lamin: {lamin}</p>
-            <p>Lomin: {lomin}</p>
-            <p>Lamax: {lamax}</p>
-            <p>Lomax: {lomax}</p>
+          <div className="bbox-info">
+            Bounding box: [{lamin}, {lomin}, {lamax}, {lomax}]
           </div>
         )}
       </div>
