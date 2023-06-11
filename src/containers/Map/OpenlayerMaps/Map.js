@@ -101,44 +101,53 @@ class MapComponent extends Component {
   }
 
   loadFlightsData() {
-    const url = '/data/openflights/data_adsb.json';
-    fetch(url)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
-        return response.json();
-      })
-      .then((json) => {
-        const flightsData = json.flights;
-
-        // Menghitung total batch yang diperlukan
-        const totalBatches = Math.ceil(flightsData.length / 1000);
-
-        // Memuat data dalam batch menggunakan setTimeout
-        let batchIndex = 0;
-        const loadNextBatch = () => {
-          const startIndex = batchIndex * 1000;
-          const endIndex = (batchIndex + 1) * 1000;
-          const flightsBatch = flightsData.slice(startIndex, endIndex);
-
-          this.loadFlightsBatch(flightsBatch);
-
-          batchIndex++;
-
-          if (batchIndex < totalBatches) {
-            setTimeout(loadNextBatch, 1000); // Menunggu 1 detik sebelum memuat batch berikutnya
+    const url = 'http://127.0.0.1:5000/aircraft/';
+  
+    const fetchData = () => {
+      fetch(url)
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
           }
-
-          this.map.render();
-        };
-
-        loadNextBatch();
-      })
-      .catch((error) => {
-        console.error('Error fetching JSON:', error);
-        console.error('URL:', url);
-      });
+          return response.json();
+        })
+        .then((json) => {
+          const flightsData = json.flights;
+  
+          // Menghitung total batch yang diperlukan
+          const totalBatches = Math.ceil(flightsData.length / 1000);
+  
+          // Memuat data dalam batch menggunakan setTimeout
+          let batchIndex = 0;
+          const loadNextBatch = () => {
+            const startIndex = batchIndex * 1000;
+            const endIndex = (batchIndex + 1) * 1000;
+            const flightsBatch = flightsData.slice(startIndex, endIndex);
+  
+            this.loadFlightsBatch(flightsBatch);
+  
+            batchIndex++;
+  
+            if (batchIndex < totalBatches) {
+              setTimeout(loadNextBatch, 20000); // Menunggu 1 detik sebelum memuat batch berikutnya
+            }
+  
+            this.map.render();
+          };
+  
+          loadNextBatch();
+        })
+        .catch((error) => {
+          console.error('Error fetching JSON:', error);
+          console.error('URL:', url);
+        });
+    };
+  
+    // Memuat data pertama kali saat halaman dimuat
+    fetchData();
+  
+    // Memuat data secara berkala setiap 5 detik
+    setInterval(fetchData, 20000);
   }
 
   loadFlightsBatch(flightsBatch) {

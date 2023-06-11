@@ -24,6 +24,7 @@ def fetch_aircraft_data():
                     flight_data[icao24].append([longitude, latitude])
                 else:
                     flight_data[icao24] = [[longitude, latitude]]
+
         print("Aircraft data fetched successfully.")
     else:
         print("Failed to fetch aircraft data.")
