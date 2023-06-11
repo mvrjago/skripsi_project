@@ -101,7 +101,7 @@ class MapComponent extends Component {
   }
 
   loadFlightsData() {
-    const url = 'http://127.0.0.1:5000/aircraft/';
+    const url = 'http://127.0.0.1:5000/aircraft';
   
     const fetchData = () => {
       fetch(url)
@@ -115,13 +115,13 @@ class MapComponent extends Component {
           const flightsData = json.flights;
   
           // Menghitung total batch yang diperlukan
-          const totalBatches = Math.ceil(flightsData.length / 1000);
+          const totalBatches = Math.ceil(flightsData.length / 10000);
   
           // Memuat data dalam batch menggunakan setTimeout
           let batchIndex = 0;
           const loadNextBatch = () => {
-            const startIndex = batchIndex * 1000;
-            const endIndex = (batchIndex + 1) * 1000;
+            const startIndex = batchIndex * 10000;
+            const endIndex = (batchIndex + 1) * 10000;
             const flightsBatch = flightsData.slice(startIndex, endIndex);
   
             this.loadFlightsBatch(flightsBatch);
@@ -147,16 +147,16 @@ class MapComponent extends Component {
     fetchData();
   
     // Memuat data secara berkala setiap 5 detik
-    setInterval(fetchData, 20000);
+    setInterval(fetchData, 5000);
   }
 
   loadFlightsBatch(flightsBatch) {
     const { lamin, lomin, lamax, lomax } = this.state;
   
-    for (let i = 0; i < flightsBatch.length; i++) {
+    for (let i = 0; i < flightsBatch.length; ++i) {
       const flights = flightsBatch[i];
       const from = flights[0];
-      const to = flights[1];
+      const to = flights[flights.length - 1]; // Menggunakan nilai `to` terbaru
   
       // Periksa apakah nilai 'from' dan 'to' valid sebelum mengakses indeksnya
       if (from && from.length >= 2 && to && to.length >= 2) {
@@ -179,7 +179,7 @@ class MapComponent extends Component {
             { x: toLonLat[1], y: toLonLat[0] }
           );
   
-          const arcLine = arcGenerator.Arc(100, { offset: 10});
+          const arcLine = arcGenerator.Arc(100, { offset: 10 });
           const features = [];
           arcLine.geometries.forEach((geometry) => {
             const line = new LineString(geometry.coords);
@@ -200,6 +200,8 @@ class MapComponent extends Component {
   
     this.tileLayer.on('postrender', this.animateFlights);
   }
+  
+  
   
 
   animateFlights = (event) => {
